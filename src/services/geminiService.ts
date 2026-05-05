@@ -280,6 +280,7 @@ export const generateVisualAid = async (input: any) => {
     Content Details: ${input.specificContent}
     Quantity: ${input.quantity || 'Standard'}
     Important: MUST include South African contextual elements and examples throughout the design and text.
+    User Image Directives: ${input.additionalInstructions || 'None'}
     Additional Info: ${IMAGE_PROMPT_GOLDEN_RULE}
   `;
 

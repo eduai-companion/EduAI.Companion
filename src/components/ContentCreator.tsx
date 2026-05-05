@@ -1191,9 +1191,9 @@ export default function ContentCreator({ isOpen, onClose, initialTab = 'teaching
                     <div className="space-y-8">
                       {visualResult.shouldGenerateImage && (visualResult.userImagePrompt || visualResult.imagePrompt) && (
                         <AiImage 
-                          prompt={visualResult.userImagePrompt || visualResult.imagePrompt} 
+                          prompt={`${visualResult.userImagePrompt || visualResult.imagePrompt}, Visual Style: ${v_style}, Color Scheme: ${v_colorScheme}, Educational illustration`}
                           aspectRatio="portrait"
-                          className="w-full max-w-2xl mx-auto mb-8"
+                          className="w-full max-w-2xl mx-auto mb-8 shadow-2xl"
                         />
                       )}
                       <ContentPreview html={visualResult.content} label="Digital Visual Asset" isDarkMode={isDarkMode} />
