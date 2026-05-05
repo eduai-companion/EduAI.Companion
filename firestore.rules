@@ -1,0 +1,132 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitives
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    
+    // Validation Helpers
+    function isValidProfile(data) {
+      return data.keys().hasAll(['id', 'email', 'role', 'updatedAt']) 
+        && data.keys().size() == 4
+        && data.id is string && data.id.size() <= 128
+        && data.email is string && data.email.size() <= 256
+        && data.role in ['teacher', 'student', 'parent', 'admin']
+        && data.updatedAt == request.time;
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll(['name', 'grade', 'email', 'status', 'teacherId', 'createdAt', 'updatedAt'])
+        && data.keys().size() == 7
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 120
+        && data.grade is string && data.grade.size() > 0 && data.grade.size() <= 100
+        && data.email is string && data.email.size() <= 256
+        && data.status in ['Active', 'Inactive']
+        && data.teacherId is string && data.teacherId == request.auth.uid
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function isValidClass(data) {
+      return data.keys().hasAll(['name', 'subject', 'teacherId', 'createdAt'])
+        && data.keys().size() == 4
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 120
+        && data.subject is string && data.subject.size() >= 0 && data.subject.size() <= 120
+        && data.teacherId is string && data.teacherId == request.auth.uid
+        && data.createdAt == request.time;
+    }
+
+    function isValidStudyGroup(data) {
+      return data.keys().hasAll(['name', 'description', 'members', 'teacherId', 'createdAt'])
+        && data.keys().size() == 5
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 120
+        && data.description is string && data.description.size() <= 500
+        && data.members is list && data.members.size() <= 1000
+        && data.teacherId is string && data.teacherId == request.auth.uid
+        && data.createdAt == request.time;
+    }
+    
+    function isValidNotification(data) {
+      return data.keys().hasAll(['title', 'message', 'read', 'userId', 'createdAt'])
+        && data.keys().size() == 5
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 200
+        && data.message is string && data.message.size() > 0 && data.message.size() <= 1000
+        && data.read is bool
+        && data.userId is string && data.userId == request.auth.uid
+        && data.createdAt == request.time;
+    }
+
+    match /profiles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId
+        && isValidProfile(incoming()) && incoming().id == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId
+        && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt'])
+        && incoming().role in ['teacher', 'student', 'parent', 'admin']
+        && incoming().updatedAt == request.time;
+    }
+
+    match /students/{studentId} {
+      allow get: if isSignedIn() && isValidId(studentId) && existing().teacherId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.teacherId == request.auth.uid;
+      
+      allow create: if isSignedIn() && isValidId(studentId)
+        && isValidStudent(incoming());
+        
+      allow update: if isSignedIn() && isValidId(studentId) 
+        && existing().teacherId == request.auth.uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'grade', 'email', 'status', 'updatedAt'])
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 120
+        && incoming().grade is string && incoming().grade.size() > 0 && incoming().grade.size() <= 100
+        && incoming().email is string && incoming().email.size() <= 256
+        && incoming().status in ['Active', 'Inactive']
+        && incoming().updatedAt == request.time;
+        
+      allow delete: if isSignedIn() && isValidId(studentId) && existing().teacherId == request.auth.uid;
+    }
+
+    match /classes/{classId} {
+      allow get: if isSignedIn() && isValidId(classId) && existing().teacherId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.teacherId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(classId) && isValidClass(incoming());
+      allow update: if isSignedIn() && isValidId(classId) && existing().teacherId == request.auth.uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'subject'])
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 120
+        && incoming().subject is string && incoming().subject.size() >= 0 && incoming().subject.size() <= 120;
+      allow delete: if isSignedIn() && isValidId(classId) && existing().teacherId == request.auth.uid;
+    }
+    
+    match /study_groups/{groupId} {
+      allow get: if isSignedIn() && isValidId(groupId) && existing().teacherId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.teacherId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(groupId) && isValidStudyGroup(incoming());
+      allow update: if isSignedIn() && isValidId(groupId) && existing().teacherId == request.auth.uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'members'])
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 120
+        && incoming().description is string && incoming().description.size() <= 500
+        && incoming().members is list && incoming().members.size() <= 1000;
+      allow delete: if isSignedIn() && isValidId(groupId) && existing().teacherId == request.auth.uid;
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && isValidId(notificationId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(notificationId) && isValidNotification(incoming());
+      allow update: if isSignedIn() && isValidId(notificationId) && existing().userId == request.auth.uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read'])
+        && incoming().read is bool;
+      allow delete: if isSignedIn() && isValidId(notificationId) && existing().userId == request.auth.uid;
+    }
+  }
+}
